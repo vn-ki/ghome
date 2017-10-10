@@ -16,6 +16,9 @@ from gtts import gTTS
 import subprocess
 #
 
+playShell = None
+IR_CONTROL = False
+
 class Device :
 	def __init__(self, name, pin) :
 		self.name = name
@@ -29,6 +32,8 @@ class Device :
 			tts = gTTS(text = str, lang='en', slow=False)
 			tts.save(".temp.mp3")
         	        #Play the mp3
+					subprocess.run('vlc .temp.mp3'.split())
+					#
 		elif s == 'off' :
 			GPIO.output(device.pin, 0)
 			str = " turned off"
@@ -36,13 +41,14 @@ class Device :
 			tts = gTTS(text = str, lang='en', slow=False)
 			tts.save(".temp.mp3")
         	        #Play the mp3
-
+					subprocess.run('vlc .temp.mp3'.split())
     	            #
 
 class ghomeAssistant :
 	Devices = []
 
-	def __init__(self, devices) :
+	def __init__(self, devices, IREnabled = False) :
+
 		#Code from google's hotword.py
 		parser = argparse.ArgumentParser(
 		formatter_class=argparse.RawTextHelpFormatter)
@@ -58,6 +64,7 @@ class ghomeAssistant :
 		with open(args.credentials, 'r') as f:
 			credentials = google.oauth2.credentials.Credentials(token=None, **json.load(f))
 		#
+
 		self.assistant = Assistant(credentials)
 
 		GPIO.setmode(GPIO.BCM)  #Sets numbering to BCM
@@ -67,6 +74,8 @@ class ghomeAssistant :
 
 		for device in self.Devices :
 			GPIO.setup(device.pin, GPIO.OUT)
+
+		IR_CONTROL = IREnabled
 
 	def _processCommand(self, s) :
 		sp = s.split(' ', 1)
@@ -95,47 +104,30 @@ class ghomeAssistant :
 
 
 def play(s) :
-#	NOTE:
-#	Play song without video : Command = 'play <song name>'
-#	Play playlist without video : Command = 'play <artist name or genre or anything> playlist'
-#	If you want to play with video, add ' with video' to the end of the command
-#
-	sp = s.split()
-	cmd = "mpsyt "
-	cmde = ""
+
+	# Idea for not closing mpsyt so that startup time is considerably reduced is borrowed from
+	# project by mikerr on raspberrypi.org
+	# Visit https://www.raspberrypi.org/forums/viewtopic.php?f=114&t=182665 for more details
+	
+	if(playShell == None)
+		playShell = subprocess.Popen("mpsyt", stdin = subprocess.PIPE, stdout=subprocess.PIPE)
+
+
+	sp = s.rsplit(' ', 1)
+	cmd = ""
+
 	if sp[-1].lower() == 'playlist' :
 		cmd += '//'
-		cmd += '/'
 		cmd += sp[0]
-		cmd = cmd.split()
-		cmd += sp[1:-1]
-		cmd += [',1', ',all', ',-a']
+		cmd += "\n1\nall\n"
 
-"""	elif sp[-1].lower() == 'video' :
-		if sp[-3].lower() == 'playlist' :
-			cmd += '//'
-			cmd += sp[0]
-			cmd = cmd.split()
-			cmd += sp[1:-3]
-			cmd += [',1', ',all', ',-w']
-"""
-		else :
-			cmd += '/'
-			cmd += sp[0]
-			cmd = cmd.split()
-			cmd += sp[1:-1]
-			cmd += [',1', ',-w']
 	else :
 		cmd += '/'
 		cmd += sp[0]
-		cmd = cmd.split()
-		cmd += sp[1:]
-		cmd += [',1', ',-a']
-	print(cmd)
-
-	p = subprocess.Popen(cmd, stdin = subprocess.PIPE, stdout=subprocess.PIPE)
-
-	input()
+		cmd += "\n1\n"
+	
+	playShell.stdin.write(bytes(cmd, 'utf-8'))
+	playShell.stdin.flush()
 
 	if IR_CONTROL is True :
 		#IR remote control
@@ -144,5 +136,4 @@ def play(s) :
 		#Wait for input for now
 		input()
 
-	subprocess.run('pkill mpv'.split())
-	subprocess.run('pkill mpsyt'.split())
+	subprocess.run('pkill vlc'.split())
