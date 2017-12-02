@@ -1,3 +1,4 @@
+
 import argparse
 import os.path
 import json
@@ -17,13 +18,33 @@ import subprocess
 
 from ghome_methods import *
 import threading
+from fb_listener import *
 #
+
+print(EventType.ON_RECOGNIZING_SPEECH_FINISHED)
 
 class ghomeAssistant :
 
 
-	def __init__(self, devices, IREnabled = False, botUsername, botPassword) :
+	def __init__(self, devices, botUsername, botPassword, IREnabled = False) :
 
+		GPIO.setmode(GPIO.BCM)  #Sets numbering to BCM
+		GPIO.setwarnings(False)  #Done so that Pi doesnt raise a runtime warning since GPIO.cleanup() isn't called
+
+		_devices = devices
+
+		for device in _devices :
+			GPIO.setup(device.pin, GPIO.OUT)
+
+		IR_CONTROL = IREnabled
+
+		self.bot = ghomeBot(botUsername, botPassword);
+
+		self.botThread = threading.Thread(target=self.bot.listen)
+
+
+	def start_listening(self) :
+		self.botThread.start()
 		#Code from google's hotword.py
 		parser = argparse.ArgumentParser(
 		formatter_class=argparse.RawTextHelpFormatter)
@@ -39,30 +60,21 @@ class ghomeAssistant :
 		with open(args.credentials, 'r') as f:
 			credentials = google.oauth2.credentials.Credentials(token=None, **json.load(f))
 		#
+		with Assistant(credentials) as assistant :
+			for event in assistant.start() :
+				if event.type == EventType.ON_START_FINISHED:
+					print(event)
 
-		self.assistant = Assistant(credentials)
+				if event.type == EventType.ON_CONVERSATION_TURN_STARTED :
+					print("say")
 
-		GPIO.setmode(GPIO.BCM)  #Sets numbering to BCM
-		GPIO.setwarnings(False)  #Done so that Pi doesnt raise a runtime warning since GPIO.cleanup() isn't called
+				if event.type == EventType.ON_END_OF_UTTERANCE :
+					print("okay")
 
-		_devices = devices
+				if event.type == EventType.ON_RECOGNIZING_SPEECH_FINISHED :
+					if isACustomCommand(event.args['text'])
+						assistant.stop_conversation()
+					processCommand(event.args['text'])
 
-		for device in _devices :
-			GPIO.setup(device.pin, GPIO.OUT)
-
-		IR_CONTROL = IREnabled
-
-		self.bot = ghomeBot(botUsername, botPassword);
-
-		self.botThread = threading.Thread(bot.listen)
-
-
-	def start_listening(self) :
-		self.botThread.start()
-		for event in assistant.start() :
-			if event.type == EventType.ON_RECONGNIZING_SPEECH_FINISHED :
-				assistant.stop_conversation()
-				processCommand(event.args['text'])
-
-	def addDevice(device) :
+	def addDevice(self, device) :
 		_devices += [device]

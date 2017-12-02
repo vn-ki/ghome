@@ -1,10 +1,14 @@
 from fbchat import Client
 from fbchat.models import *
-from subprocess import PIPE, Popen
+
+from gtts import gTTS
+import subprocess
 
 from ghome_methods import *
 
+
 allowedUIDS = ['100002275640165']
+
 
 class ghomeBot(Client) :
     def onMessage(self, author_id, message_object, thread_id, thread_type, **kwargs):
